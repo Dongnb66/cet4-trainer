@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>四级冲刺 · 词汇训练</title>
+<script src="data.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font:16px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:#0f172a; color:#e2e8f0; max-width:520px; margin:0 auto; min-height:100vh; padding-bottom:76px; }
+  header { padding:14px 16px 6px; display:flex; justify-content:space-between; align-items:baseline; }
+  header h1 { font-size:18px; color:#38bdf8; }
+  header span { font-size:12px; color:#64748b; }
+  .wrap { padding:8px 16px; }
+  .card { background:#1e293b; border-radius:14px; padding:16px; margin-bottom:12px; }
+  .w { font-size:26px; font-weight:700; }
+  .ph { color:#94a3b8; font-size:14px; margin-left:8px; }
+  .cn { color:#fbbf24; margin:6px 0; }
+  .ex { background:#0f172a; border-radius:10px; padding:10px; margin-top:8px; font-size:14px; }
+  .ex i { color:#94a3b8; font-style:normal; }
+  .rel { color:#7dd3fc; font-size:13px; margin-top:6px; }
+  .btn { display:block; width:100%; border:0; border-radius:12px; padding:13px; font-size:16px; margin-top:10px; color:#e2e8f0; background:#334155; }
+  .btn:active { opacity:.8; }
+  .btn.pri { background:#0284c7; font-weight:700; }
+  .btn.ok { background:#15803d; } .btn.mid { background:#a16207; } .btn.no { background:#b91c1c; }
+  .choice { display:block; width:100%; text-align:left; border:0; border-radius:12px; padding:13px 14px; font-size:16px; margin-top:10px; color:#e2e8f0; background:#334155; }
+  .choice.right { background:#15803d; } .choice.wrong { background:#b91c1c; }
+  .bar { height:8px; background:#334155; border-radius:4px; overflow:hidden; margin:8px 0; }
+  .bar i { display:block; height:100%; background:#38bdf8; }
+  .stats { display:flex; gap:8px; margin-bottom:12px; }
+  .stat { flex:1; background:#1e293b; border-radius:12px; padding:10px; text-align:center; }
+  .stat b { font-size:20px; color:#38bdf8; display:block; }
+  .stat span { font-size:11px; color:#94a3b8; }
+  .weak { display:flex; justify-content:space-between; padding:8px 4px; border-bottom:1px solid #334155; font-size:14px; }
+  .weak small { color:#f87171; }
+  nav { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:520px; display:flex; background:#1e293b; border-top:1px solid #334155; padding-bottom:env(safe-area-inset-bottom); }
+  nav button { flex:1; border:0; background:none; color:#64748b; font-size:13px; padding:10px 0 8px; }
+  nav button.on { color:#38bdf8; font-weight:700; }
+  .muted { color:#64748b; font-size:13px; }
+  h2 { font-size:15px; color:#94a3b8; margin:14px 0 8px; }
+  textarea { width:100%; height:90px; background:#0f172a; color:#e2e8f0; border:1px solid #334155; border-radius:10px; padding:10px; font-size:12px; }
+  .fb { border-radius:10px; padding:10px; margin-top:8px; font-size:14px; }
+  .fb.g { background:#14532d; } .fb.b { background:#7f1d1d; }
+</style>
+</head>
+<body>
+<header><h1>四级冲刺</h1><span id="hd">目标 425+</span></header>
+<div class="wrap" id="main"></div>
+<nav>
+  <button data-t="learn" class="on">学习</button>
+  <button data-t="review">复习</button>
+  <button data-t="quiz">自测</button>
+  <button data-t="stats">复盘</button>
+</nav>
+<script>
+const IV = [0, 10*60e3, 864e5, 2*864e5, 4*864e5, 8*864e5, 15*864e5]; // box1:10min box2:1d box3:2d box4:4d box5:8d box6:15d
+const D = window.CET4_DATA, KEY = "cet4v1", CORE = D.filter(d => d.b === 1).length;
+const today = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); };
+let S;
+try { S = JSON.parse(localStorage.getItem(KEY)); } catch(e) { S = null; }
+if (!S || !S.words) S = { words:{}, log:{}, cur:0, streak:0, streakLast:"" };
+const save = () => localStorage.setItem(KEY, JSON.stringify(S));
+const info = w => S.words[w];
+const tr = d => (d.t || []).map(t => (t[0] ? t[0] + ". " : "") + t[1]).join("；") || "—";
+const due = () => Object.keys(S.words).filter(w => S.words[w].due <= Date.now());
+const daylog = () => { const t = today(); if (!S.log[t]) S.log[t] = {learn:0, rev:0, ok:0, tot:0}; return S.log[t]; };
+const touchStreak = () => { const t = today(); if (S.streakLast !== t) { const y = new Date(Date.now() - 864e5); const ys = y.getFullYear() + "-" + String(y.getMonth()+1).padStart(2,"0") + "-" + String(y.getDate()).padStart(2,"0"); S.streak = (S.streakLast === ys) ? S.streak + 1 : 1; S.streakLast = t; } };
+const byWord = {}; D.forEach(d => byWord[d.w] = d);
+
+/* ---------- 学习 ---------- */
+let learnBuf = null, learnIdx = 0;
+function nextLearn() {
+  while (S.cur < D.length && info(D[S.cur].w)) S.cur++;
+  if (S.cur >= D.length) return null;
+  return D[S.cur];
+}
+function startLearn() {
+  learnBuf = []; learnIdx = 0;
+  for (let i = 0; i < 10; i++) { const d = nextLearn(); if (!d) break; learnBuf.push(d); S.cur++; }
+  renderLearn();
+}
+function renderLearn() {
+  const m = document.getElementById("main");
+  const dl = daylog();
+  const dayBars = Math.min(dl.learn, 40);
+  if (!learnBuf || learnIdx >= learnBuf.length) {
+    const rest = Math.max(0, 40 - dl.learn);
+    m.innerHTML = '<div class="card"><b>本组完成 ✓</b><p class="muted" style="margin-top:6px">今日新词 ' + dl.learn + ' / 40，还差 ' + rest + ' 个到今日目标。</p>' +
+      (rest > 0 ? '<button class="btn pri" id="nx">再来一组（10 词）</button>' : '<p class="muted" style="margin-top:8px">今日目标已达成，去「复习」清掉到期词，或去「复盘」看薄弱词。</p>') + '</div>';
+    if (rest > 0) document.getElementById("nx").onclick = startLearn;
+    save(); return;
+  }
+  const d = learnBuf[learnIdx];
+  m.innerHTML = '<div class="bar"><i style="width:' + (dayBars * 2.5) + '%"></i></div>' +
+    '<div class="muted" style="margin-bottom:8px">新词 ' + (dl.learn + 1) + ' · 第 ' + (learnIdx + 1) + '/10 张</div>' +
+    '<div class="card"><span class="w">' + d.w + '</span><span class="ph">/' + (d.p || "") + '/</span>' +
+    '<div id="back" style="display:none"><div class="cn">' + tr(d) + '</div>' +
+    (d.e ? '<div class="ex">' + d.e[0] + '<br><i>' + d.e[1] + '</i></div>' : '') +
+    (d.s ? '<div class="rel">≈ ' + d.s.join("、") + '</div>' : '') +
+    (d.r ? '<div class="rel">同根: ' + d.r.join("；") + '</div>' : '') +
+    '</div><button class="btn pri" id="show">显示释义</button>' +
+    '<div id="judge" style="display:none">' +
+    '<button class="btn no" data-j="0">不认识</button><button class="btn mid" data-j="1">模糊</button><button class="btn ok" data-j="2">认识</button></div></div>';
+  document.getElementById("show").onclick = () => {
+    document.getElementById("back").style.display = "block";
+    document.getElementById("show").style.display = "none";
+    document.getElementById("judge").style.display = "block";
+  };
+  document.querySelectorAll("#judge button").forEach(b => b.onclick = () => {
+    const j = +b.dataset.j;
+    const rec = info(d.w) || {box:1, due:0, ok:0, wrong:0, last:0};
+    if (j === 2) { rec.box = Math.max(rec.box, 2); rec.due = Date.now() + IV[rec.box]; rec.ok++; }
+    else { rec.box = 1; rec.due = Date.now() + IV[1]; if (j === 0) rec.wrong++; }
+    rec.last = Date.now(); S.words[d.w] = rec;
+    const dl = daylog(); dl.learn++; dl.tot++; if (j === 2) dl.ok++;
+    touchStreak(); learnIdx++; save(); renderLearn();
+  });
+}
+
+/* ---------- 测验引擎 ---------- */
+let qz = null;
+function mkQuestion(d) {
+  if (d.q) return { w:d.w, type:"q", q:d.q.q, c:d.q.c, a:d.q.a, x:d.q.x };
+  const pool = D.filter(x => x.w !== d.w);
+  const set = new Set([d.w]);
+  const cs = [];
+  while (cs.length < 3) { const p = pool[Math.floor(Math.random() * pool.length)]; if (!set.has(p.w)) { set.add(p.w); cs.push(p.w); } }
+  const ci = Math.floor(Math.random() * 4); cs.splice(ci, 0, d.w);
+  return { w:d.w, type:"cn", q:"「 " + tr(d) + " 」 对应的英文是：", c:cs, a:ci, x:d.e ? d.e[0] + "  " + d.e[1] : "" };
+}
+function startQuiz(title, list, after) {
+  if (!list.length) { renderTab("quiz"); return; }
+  qz = { title, list, i:0, ok:0, after };
+  renderQ();
+}
+function renderQ() {
+  const m = document.getElementById("main");
+  if (qz.i >= qz.list.length) {
+    const acc = Math.round(qz.ok / qz.list.length * 100);
+    m.innerHTML = '<div class="card"><b>本组结束：' + qz.ok + "/" + qz.list.length + "（" + acc + '%）</b>' +
+      '<p class="muted" style="margin-top:6px">错词已进复习队列（10 分钟后到期）。</p><button class="btn pri" id="done">完成</button></div>';
+    document.getElementById("done").onclick = () => { const f = qz.after; qz = null; if (f) f(); else renderTab("stats"); };
+    return;
+  }
+  const q = qz.list[qz.i];
+  m.innerHTML = '<div class="muted">' + qz.title + " · 第 " + (qz.i + 1) + "/" + qz.list.length + " 题</div>" +
+    '<div class="card"><div style="font-size:17px">' + q.q + '</div><div id="cs"></div><div id="fb"></div></div>';
+  const cs = document.getElementById("cs");
+  q.c.forEach((c, i) => {
+    const b = document.createElement("button"); b.className = "choice"; b.textContent = c;
+    b.onclick = () => {
+      document.querySelectorAll("#cs .choice").forEach((x, j) => { x.disabled = true; if (j === q.a) x.classList.add("right"); });
+      if (i !== q.a) b.classList.add("wrong");
+      const rec = info(q.w) || {box:1, due:0, ok:0, wrong:0, last:0};
+      const good = i === q.a;
+      if (good) { rec.box = Math.min(6, rec.box + 1); rec.ok++; } else { rec.box = 1; rec.wrong++; }
+      rec.due = Date.now() + IV[rec.box]; rec.last = Date.now(); S.words[q.w] = rec;
+      const dl = daylog(); dl.tot++; if (good) { dl.ok++; dl.rev++; } else dl.rev++;
+      touchStreak(); save();
+      document.getElementById("fb").innerHTML = '<div class="fb ' + (good ? "g" : "b") + '">' + (good ? "✓ 正确" : "✗ 正确答案：" + q.c[q.a]) +
+        (q.x ? "<br><i style='color:#94a3b8'>" + q.x + "</i>" : "") + "</div>" +
+        '<button class="btn pri" id="nx">下一题</button>';
+      document.getElementById("nx").onclick = () => { qz.i++; renderQ(); };
+    };
+    cs.appendChild(b);
+  });
+}
+
+/* ---------- 复习 ---------- */
+function renderReview() {
+  const m = document.getElementById("main");
+  const dueList = due().sort((a, b) => S.words[a].due - S.words[b].due).map(w => byWord[w]).filter(Boolean);
+  if (!dueList.length) {
+    const next = Object.keys(S.words).map(w => S.words[w].due).sort((a, b) => a - b)[0];
+    m.innerHTML = '<div class="card"><b>复习队列已清空 ✓</b><p class="muted" style="margin-top:6px">' +
+      (next ? "下一个到期：" + new Date(next).toLocaleString("zh-CN", {hour12:false}) : "还没有任何词入队——先去「学习」背新词。") + '</p></div>' +
+      '<button class="btn" id="go">强制自测 10 题（已学词）</button>';
+    document.getElementById("go").onclick = () => {
+      const t = Object.keys(S.words).map(w => byWord[w]).filter(Boolean);
+      shuffle(t); startQuiz("强制自测", t.slice(0, 10).map(mkQuestion), null);
+    };
+    return;
+  }
+  startQuiz("复习到期词", dueList.slice(0, 30).map(mkQuestion), () => renderTab("review"));
+}
+
+/* ---------- 自测 ---------- */
+function renderQuiz() {
+  const m = document.getElementById("main");
+  const learned = Object.keys(S.words);
+  const weak = learned.filter(w => S.words[w].wrong > 0).sort((a, b) => (S.words[b].wrong - S.words[a].wrong) || (S.words[a].box - S.words[b].box));
+  m.innerHTML = '<div class="card"><b>选择自测范围</b>' +
+    '<button class="btn" id="z1">薄弱词优先（' + Math.min(10, weak.length) + ' 题，现有 ' + weak.length + ' 个错词）</button>' +
+    '<button class="btn" id="z2">已学词随机 10 题（现有 ' + learned.length + ' 词）</button>' +
+    '<button class="btn" id="z3">真题选择题专项（' + D.filter(d => d.q && info(d.w)).length + ' 个已学词带真题）</button>' +
+    '<p class="muted" style="margin-top:8px">自测结果会计入记忆盒：答对升盒、答错回盒 1。</p></div>';
+  document.getElementById("z1").onclick = () => { if (!weak.length) return; startQuiz("薄弱词", shuffle(weak.slice()).slice(0, 10).map(w => mkQuestion(byWord[w])), () => renderTab("quiz")); };
+  document.getElementById("z2").onclick = () => { const t = shuffle(learned.slice()).slice(0, 10).map(w => mkQuestion(byWord[w])); startQuiz("已学词随机", t, () => renderTab("quiz")); };
+  document.getElementById("z3").onclick = () => { const t = shuffle(D.filter(d => d.q && info(d.w)).slice()).slice(0, 10).map(mkQuestion); startQuiz("真题选择题", t, () => renderTab("quiz")); };
+}
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+/* ---------- 复盘 ---------- */
+function renderStats() {
+  const m = document.getElementById("main");
+  const learned = Object.keys(S.words);
+  const mastered = learned.filter(w => S.words[w].box >= 4).length;
+  const dl = daylog();
+  const acc = dl.tot ? Math.round(dl.ok / dl.tot * 100) + "%" : "—";
+  let days7 = "", tot7 = 0, ok7 = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(Date.now() - (6 - i) * 864e5);
+    const k = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+    const L = S.log[k] || {tot:0, ok:0};
+    tot7 += L.tot; ok7 += L.ok;
+    const h = L.tot ? Math.round(L.ok / L.tot * 100) : 0;
+    days7 += '<div style="flex:1;text-align:center"><div style="height:40px;display:flex;align-items:flex-end"><div style="width:100%;height:' + Math.max(4, h * 0.4) + 'px;background:' + (h >= 70 ? "#22c55e" : h > 0 ? "#f59e0b" : "#334155") + ';border-radius:3px"></div></div><div style="font-size:10px;color:#64748b">' + (i + 1) + "</div></div>";
+  }
+  const weak = learned.filter(w => S.words[w].wrong > 0).sort((a, b) => (S.words[b].wrong - S.words[a].wrong) || (S.words[a].box - S.words[b].box)).slice(0, 20);
+  const batch = Math.floor(Math.min(learned.length, CORE) / 40);
+  m.innerHTML = '<div class="stats"><div class="stat"><b>' + learned.length + '</b><span>已学词</span></div>' +
+    '<div class="stat"><b>' + mastered + '</b><span>进阶掌握</span></div>' +
+    '<div class="stat"><b>' + S.streak + '</b><span>连续打卡/天</span></div></div>' +
+    '<div class="card"><b>今日</b><p class="muted" style="margin-top:4px">新词 ' + dl.learn + " · 复习 " + dl.rev + " · 正确率 " + acc + "（目标 40 词/天，已完成 " + Math.min(100, Math.round(dl.learn / 40 * 100)) + '%）</p>' +
+    '<p class="muted" style="margin-top:4px">核心词进度：第 ' + batch + " / " + Math.ceil(CORE / 40) + " 批（" + Math.min(learned.length, CORE) + "/" + CORE + "）</p></div>" +
+    '<h2>近 7 天正确率</h2><div class="card" style="display:flex">' + days7 + "</div>" +
+    '<h2>薄弱词 Top' + weak.length + "（共 " + learned.filter(w => S.words[w].wrong > 0).length + ' 个）</h2><div class="card">' +
+    (weak.length ? weak.map(w => { const r = S.words[w]; return '<div class="weak"><span>' + w + ' <span class="muted">' + tr(byWord[w] || {}) + "</span></span><small>错 " + r.wrong + " · 盒" + r.box + "</small></div>"; }).join("") : '<p class="muted">还没有错词记录。</p>') + "</div>" +
+    '<h2>把进度发给 AI 复盘</h2><div class="card"><p class="muted">点「导出」复制进度 JSON，发给 Trae 里的我——我会按你的错词、正确率和遗忘曲线出针对性重测卷。</p>' +
+    '<button class="btn pri" id="exp">导出进度（复制到剪贴板）</button><button class="btn" id="sum">复制复盘摘要（文字版）</button>' +
+    '<textarea id="ta" readonly style="display:none"></textarea><p class="muted" style="margin-top:6px">数据仅存在本机浏览器，清除浏览器数据会丢进度，记得常导出备份。</p></div>';
+  document.getElementById("exp").onclick = async () => {
+    const s = JSON.stringify(S);
+    try { await navigator.clipboard.writeText(s); alert("已复制进度 JSON，直接粘贴发给 Trae"); }
+    catch (e) { const ta = document.getElementById("ta"); ta.style.display = "block"; ta.value = s; ta.select(); document.execCommand("copy"); alert("已选中并复制"); }
+  };
+  document.getElementById("sum").onclick = async () => {
+    const topw = weak.slice(0, 10).map(w => w + "(错" + S.words[w].wrong + ")").join("、");
+    const s = "四级冲刺进度 " + today() + "：累计已学 " + learned.length + " 词（核心 " + Math.min(learned.length, CORE) + "/" + CORE + "，第 " + batch + "/" + Math.ceil(CORE / 40) + " 批），连续打卡 " + S.streak + " 天；今日新词 " + dl.learn + " 复习 " + dl.rev + " 正确率 " + acc + "；近7天正确率 " + (tot7 ? Math.round(ok7 / tot7 * 100) + "%" : "—") + "；薄弱词：" + (topw || "无") + "。请针对性出题。";
+    try { await navigator.clipboard.writeText(s); alert("已复制摘要，粘贴发给 Trae"); } catch (e) { alert(s); }
+  };
+}
+
+/* ---------- 路由 ---------- */
+const TABS = { learn: renderLearn, review: renderReview, quiz: renderQuiz, stats: renderStats };
+function renderTab(t) {
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.t === t));
+  TABS[t]();
+}
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => { learnBuf = null; renderTab(b.dataset.t); });
+if (!S.words || !Object.keys(S.words).length) {
+  document.getElementById("main").innerHTML = '<div class="card"><b>第一次用？看这里</b>' +
+    '<p style="margin-top:8px">① 每天目标 <b>40 个新词</b>（4 组 × 10），顺序与 Trae 里的批次材料一致；</p>' +
+    '<p style="margin-top:4px">② 背完的词自动进记忆盒：答对升盒（1→2→4→8→15 天后复习），答错回盒 1；</p>' +
+    '<p style="margin-top:4px">③ 「复盘」页看正确率、薄弱词，一键导出进度发给 Trae，AI 按数据出针对性重测卷。</p>' +
+    '<button class="btn pri" id="st">开始第 1 组</button></div>';
+  document.getElementById("st").onclick = () => startLearn();
+} else {
+  renderTab("learn");
+}
+</script>
+</body>
+</html>
