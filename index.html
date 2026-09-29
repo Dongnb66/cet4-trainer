@@ -51,6 +51,7 @@
   <button data-t="learn" class="on">学习</button>
   <button data-t="review">复习</button>
   <button data-t="quiz">自测</button>
+  <button data-t="papers">试卷</button>
   <button data-t="stats">复盘</button>
 </nav>
 <script>
@@ -227,6 +228,7 @@ function renderStats() {
     '<h2>近 7 天正确率</h2><div class="card" style="display:flex">' + days7 + "</div>" +
     '<h2>薄弱词 Top' + weak.length + "（共 " + learned.filter(w => S.words[w].wrong > 0).length + ' 个）</h2><div class="card">' +
     (weak.length ? weak.map(w => { const r = S.words[w]; return '<div class="weak"><span>' + w + ' <span class="muted">' + tr(byWord[w] || {}) + "</span></span><small>错 " + r.wrong + " · 盒" + r.box + "</small></div>"; }).join("") : '<p class="muted">还没有错词记录。</p>') + "</div>" +
+    '<h2>整卷成绩</h2>' + ((S.papers && S.papers.length) ? '<div class="card">' + S.papers.slice(0, 3).map(p => '<div class="weak"><span>' + p.id + '</span><small>听 ' + p.l[0] + "/" + p.l[1] + " · 读 " + p.r[0] + "/" + p.r[1] + "</small></div>").join("") + "</div>" : '<p class="muted" style="margin:0 0 8px">还没录入整卷成绩——去「试卷」页。</p>') +
     '<h2>把进度发给 AI 复盘</h2><div class="card"><p class="muted">点「导出」复制进度 JSON，发给 Trae 里的我——我会按你的错词、正确率和遗忘曲线出针对性重测卷。</p>' +
     '<button class="btn pri" id="exp">导出进度（复制到剪贴板）</button><button class="btn" id="sum">复制复盘摘要（文字版）</button>' +
     '<textarea id="ta" readonly style="display:none"></textarea><p class="muted" style="margin-top:6px">数据仅存在本机浏览器，清除浏览器数据会丢进度，记得常导出备份。</p></div>';
@@ -242,8 +244,39 @@ function renderStats() {
   };
 }
 
+/* ---------- 试卷 ---------- */
+const SITES = [
+  ["wordcram 在线模考（2013-2025 整卷在线做题，点词查义、段落带译文）", "https://wordcram.com.cn/zhenti-cet4"],
+  ["懒笔记真题库（2015-2026 整卷网页版 + 逐题解析，手机可开）", "https://english-exam.lazynote.cn/cet4/"],
+  ["真题 + 听力 MP3 下载（2021-2025，免登录）", "https://catteacher0515.github.io/cet4-download/"],
+  ["cettong 真题库（47 套，试卷/答案/听力 MP3）", "https://www.cettong.cn/library/cet4"]
+];
+function renderPapers() {
+  const m = document.getElementById("main");
+  const papers = S.papers || (S.papers = []);
+  let hist = papers.map((p, i) =>
+    '<div class="weak"><span>' + p.id + ' <span class="muted">听力 ' + p.l[0] + "/" + p.l[1] + " · 阅读 " + p.r[0] + "/" + p.r[1] + (p.words ? " · 生词 " + p.words.split(/[,,，，\\s]+/).filter(Boolean).length + " 个" : "") + "</span></span><small>" + p.date + "</small></div>").join("");
+  m.innerHTML = '<div class="card"><b>怎么用「试卷」页</b><p class="muted" style="margin-top:6px">① 点下面的站去刷整卷（听力用带 MP3 的站）；② 回来把每套的客观题对错数和错题生词录进来；③ 导出进度发 Trae——AI 按你录的数据复盘、把生词做成重测卷、错词关联进记忆盒。</p></div>' +
+    '<h2>整卷真题（站外开做）</h2>' +
+    SITES.map(s => '<div class="card"><b>' + s[0] + '</b><button class="btn" onclick="window.open(\'' + s[1] + '\')">打开</button></div>').join("") +
+    '<h2>成绩录入（做完一套录一套）</h2><div class="card">' +
+    '<input id="pid" placeholder="套卷，如 2025-06-1" style="width:100%;box-sizing:border-box;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:10px;padding:10px;margin-bottom:8px">' +
+    '<input id="pl" placeholder="听力 对/25，如 15/25" style="width:100%;box-sizing:border-box;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:10px;padding:10px;margin-bottom:8px">' +
+    '<input id="pr" placeholder="阅读 对/30，如 20/30" style="width:100%;box-sizing:border-box;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:10px;padding:10px;margin-bottom:8px">' +
+    '<textarea id="pw" placeholder="错题里的生词，逗号分隔（我会关联词书出重测卷）" style="height:70px"></textarea>' +
+    '<button class="btn pri" id="psave">保存这套成绩</button></div>' +
+    (papers.length ? '<h2>已录成绩（' + papers.length + ' 套）</h2><div class="card">' + hist + "</div>" : "");
+  document.getElementById("psave").onclick = () => {
+    const id = document.getElementById("pid").value.trim() || ("paper-" + (papers.length + 1));
+    const p1 = document.getElementById("pl").value.trim().split(/[//]/).map(Number);
+    const p2 = document.getElementById("pr").value.trim().split(/[//]/).map(Number);
+    papers.unshift({ id, date: today(), l: [p1[0] || 0, p1[1] || 25], r: [p2[0] || 0, p2[1] || 30], words: document.getElementById("pw").value.trim() });
+    save(); renderPapers();
+  };
+}
+
 /* ---------- 路由 ---------- */
-const TABS = { learn: renderLearn, review: renderReview, quiz: renderQuiz, stats: renderStats };
+const TABS = { learn: renderLearn, review: renderReview, quiz: renderQuiz, papers: renderPapers, stats: renderStats };
 function renderTab(t) {
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.t === t));
   TABS[t]();
